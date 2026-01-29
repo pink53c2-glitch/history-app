@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Personal History App</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: sans-serif; padding: 40px; max-width: 600px; margin: auto; background-color: #f4f4f9; }
+        .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        input { padding: 10px; width: 100%; margin-bottom: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 10px 20px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 4px; width: 100%; margin-bottom: 5px; }
+        button:hover { background-color: #0056b3; }
+        button.secondary { background-color: #6c757d; }
+        .hidden { display: none; }
+        h2 { margin-top: 0; color: #333; }
+        ul { list-style-type: none; padding: 0; }
+        li { background: #eef; margin: 5px 0; padding: 10px; border-radius: 4px; border-left: 4px solid #007bff; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div id="login-container">
+            <h2>🔐 Login to View Your History</h2>
+            <input type="email" id="email" placeholder="Enter your email">
+            <input type="password" id="password" placeholder="Enter password">
+            <button onclick="signUp()">Sign Up (New User)</button>
+            <button class="secondary" onclick="login()">Log In</button>
+        </div>
+
+        <div id="app-container" class="hidden">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin:0;">📂 My Notes</h2>
+                <button class="secondary" onclick="logout()" style="width: auto; padding: 5px 10px; font-size: 0.8em;">Log Out</button>
+            </div>
+            
+            <p id="user-display" style="color: gray; font-size: 0.9em;"></p>
+            
+            <input type="text" id="messageInput" placeholder="Write something to save...">
+            <button onclick="addMessage()">Save to History</button>
+
+            <h3>Your Saved History:</h3>
+            <ul id="messageList"></ul>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. CONFIGURATION ---
+        const SUPABASE_URL = 'https://jcoucgppzoppppqaflhot.supabase.co'; // Paste your URL here
+        const SUPABASE_KEY = 'sb_publishable_CUvcKUf28jz2qJstu7Iaqw_P4L_Igv-'; // Paste your Key here
+        
+        const { createClient } = supabase;
+        const _supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // --- 2. AUTHENTICATION ---
+        let currentUser = null;
+
+        _supabase.auth.onAuthStateChange((event, session) => {
+            if (session) {
+                currentUser = session.user;
+                document.getElementById('login-container').classList.add('hidden');
+                document.getElementById('app-container').classList.remove('hidden');
+                document.getElementById('user-display').textContent = `Logged in as: ${currentUser.email}`;
+                fetchMessages(); // Load THIS user's history
+            } else {
+                currentUser = null;
+                document.getElementById('login-container').classList.remove('hidden');
+                document.getElementById('app-container').classList.add('hidden');
+            }
+        });
+
+        async function signUp() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const { error } = await _supabase.auth.signUp({ email, password });
+            if (error) alert(error.message);
+            else alert("Account created! You can now Log In.");
+        }
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const { error } = await _supabase.auth.signInWithPassword({ email, password });
+            if (error) alert(error.message);
+        }
+
+        async function logout() {
+            await _supabase.auth.signOut();
+        }
+
+        // --- 3. DATABASE (The "Private History" Logic) ---
+        async function fetchMessages() {
+            if (!currentUser) return;
+
+            const { data, error } = await _supabase
+                .from('messages')
+                .select('*')
+                .eq('user_email', currentUser.email); // <--- FILTER: Show only MY data
+
+            const list = document.getElementById('messageList');
+            list.innerHTML = ''; 
+
+            if (data) {
+                data.forEach(msg => {
+                    const li = document.createElement('li');
+                    li.textContent = msg.content;
+                    list.appendChild(li);
+                });
+            }
+        }
+
+        async function addMessage() {
+            const input = document.getElementById('messageInput');
+            const text = input.value;
+            if (!text) return;
+
+            const { error } = await _supabase
+                .from('messages')
+                .insert({ content: text, user_email: currentUser.email });
+
+            if (!error) {
+                input.value = '';
+                fetchMessages();
+            } else {
+                alert('Error: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>
